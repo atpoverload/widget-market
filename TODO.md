@@ -1,0 +1,4 @@
+ - design a server config
+ - write better log outputs
+ - write better validator
+ - write tests
