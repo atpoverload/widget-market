@@ -4,7 +4,7 @@ a toy simulation framework for trading in a market.
 
 ## usage
 
-`widget-trader` has a cli tool that is used to run and communicate with servers. you will only need to install `[cargo](https://www.rust-lang.org/tools/install)` to use it. once you've installed rust, open two terminals and navigate them to the directory where this project is.
+`widget-trader` has a cli tool that is used to run and communicate with servers. you will only need to install [`cargo`](https://www.rust-lang.org/tools/install) to use it. once you've installed rust, open two terminals and navigate them to the directory where this project is.
 
 in the first terminal, run the following to start a server:
 
