@@ -56,23 +56,16 @@ impl WidgetMarketClient {
         request.get().set_id(id);
 
         let result = request.send().promise.await.unwrap();
-
         let market = result
             .get()
-            .unwrap()
-            .get_market()
             .unwrap();
         MarketSnapshot {
             account: market.get_account()
-                .unwrap()
-                .get_widgets()
                 .unwrap()
                 .iter()
                 .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
                 .collect(),
             market: market.get_market()
-                .unwrap()
-                .get_widgets()
                 .unwrap()
                 .iter()
                 .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
@@ -83,9 +76,9 @@ impl WidgetMarketClient {
     // request a trade be made
     pub async fn trade(&self, id: &str, first: &str, second: &str) -> bool {
         let mut request = self.service.trade_request();
-        request.get().get_transaction().unwrap().set_id(id);
-        request.get().get_transaction().unwrap().set_buy(first);
-        request.get().get_transaction().unwrap().set_sell(second);
+        request.get().set_id(id);
+        request.get().set_buy(first);
+        request.get().set_sell(second);
 
         if let Ok(_) = request.send().promise.await {true} else {false}
     }

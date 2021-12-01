@@ -112,14 +112,6 @@ impl WidgetMarketImpl {
     }
 }
 
-fn add_account(items: &HashMap<String, i32>, account: widget_market::account::Builder) {
-    let mut widgets = account.init_widgets(items.len() as u32);
-    items.iter().enumerate().for_each(|(i, (w, c))| {
-        widgets.reborrow().get(i as u32).set_widget(w);
-        widgets.reborrow().get(i as u32).set_count(*c as i32);
-    });
-}
-
 impl widget_market::Server for WidgetMarketImpl {
     fn join(&mut self, _: widget_market::JoinParams, mut results: widget_market::JoinResults) -> Promise<(), capnp::Error> {
         info!("join requested");
@@ -149,9 +141,20 @@ impl widget_market::Server for WidgetMarketImpl {
             ));
         }
 
-        let mut market = results.get().init_market();
-        add_account(&self.market, market.reborrow().init_market());
-        add_account(self.accounts.get(id).unwrap(), market.reborrow().init_account());
+        let mut market = results.get();
+
+        let mut account = market.reborrow().init_market(self.market.len() as u32);
+        self.market.iter().enumerate().for_each(|(i, (w, c))| {
+            account.reborrow().get(i as u32).set_widget(w);
+            account.reborrow().get(i as u32).set_count(*c as i32);
+        });
+
+        let mut account = market.reborrow().init_account(self.market.len() as u32);
+        self.accounts.get(id).unwrap().iter().enumerate().for_each(|(i, (w, c))| {
+            account.reborrow().get(i as u32).set_widget(w);
+            account.reborrow().get(i as u32).set_count(*c as i32);
+        });
+
         info!("sending snapshot to account {}", id);
 
         Promise::ok(())
@@ -159,10 +162,10 @@ impl widget_market::Server for WidgetMarketImpl {
 
     fn trade(&mut self, params: widget_market::TradeParams, _: widget_market::TradeResults) -> Promise<(), capnp::Error> {
         // grab the params
-        let transaction = pry!(params.get()).get_transaction().unwrap();
-        let id = transaction.get_id().unwrap();
-        let buy = transaction.get_buy().unwrap();
-        let sell = transaction.get_sell().unwrap();
+        let params = pry!(params.get());
+        let id = params.get_id().unwrap();
+        let buy = params.get_buy().unwrap();
+        let sell = params.get_sell().unwrap();
         info!("trade requested by account {}", id);
 
         // validate the params
