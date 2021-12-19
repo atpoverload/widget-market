@@ -1,8 +1,8 @@
 // implementation for a very simple market that is backed by hash maps
 //
 // the market has the following properties:
-//  - the market's starting contents are user provided
-//  - new accounts start with 1 of each widget
+//  - the market's can be created with either a hash map of str->int or a json map of ints
+//  - new accounts are given 1 of each widget
 //  - added accounts start with their provided widgets
 //  - the market reports the exact contents for both itself and accounts
 //  - the market's will not allow trades of new widgets
@@ -445,6 +445,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .takes_value(true)
             .help("path to an market as a json"))
         .get_matches();
+
     env_logger::builder().filter(None, log::LevelFilter::Debug).init();
 
     let market = match args.value_of("market") {
@@ -463,5 +464,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("could not parse address");
     info!("starting foo market server at {} with contents:", addr);
     market.get_market().unwrap().iter().for_each(|(k, v)| {info!(" - {}: {}", k, v);});
-    server::main(addr, market).await
+
+    server::single_market(addr, market).await
 }

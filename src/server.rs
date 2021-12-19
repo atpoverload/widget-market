@@ -9,7 +9,7 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use crate::widget_capnp::widget_market;
 
-pub async fn main<M: 'static + widget_market::Server>(addr: SocketAddr, market: M) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn single_market<M: 'static + widget_market::Server>(addr: SocketAddr, market: M) -> Result<(), Box<dyn std::error::Error>> {
     LocalSet::new()
         .run_until(async move {
             let listener = TcpListener::bind(&addr).await?;
