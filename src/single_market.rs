@@ -133,12 +133,8 @@ pub async fn run<M: 'static + Market>(addr: SocketAddr, market: M) -> Result<(),
     LocalSet::new()
         .run_until(async move {
             let listener = TcpListener::bind(&addr).await?;
-            // let market = SingleMarketServer {
-            //     market: Rc::new(market)
-            // };
             let widget_client: widget_capnp::market::Client = capnp_rpc::new_client(market);
 
-            // TODO: we want to also have a trade server
             info!("started server at {}", addr);
             loop {
                 let (stream, _) = listener.accept().await?;

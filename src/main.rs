@@ -1,5 +1,6 @@
 use std::fs;
 use std::net::ToSocketAddrs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::{App, Arg};
 use log::{error, info};
@@ -99,9 +100,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let account = service.leave(id).await;
                         let path = match args.value_of("output") {
                             Some(path) => path.to_string(),
-                            _ => format!("{}.json", id),
+                            _ => format!("{}_{}.json", id, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()),
                         };
-                        info!("wrote account details to {}", path);
+                        info!("writing account details to {}", path);
                         if let Err(error) = fs::write(path, serde_json::to_string(&account).unwrap()) {
                             error!("an error occurred while writing the account: {}", error);
                         }
