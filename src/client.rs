@@ -1,17 +1,11 @@
-use std::collections::HashMap;
-use std::net::SocketAddr;
+// a simple client that executes tasks immediately
 use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
 use futures::AsyncReadExt;
 use futures::FutureExt;
+use std::collections::HashMap;
+use std::net::SocketAddr;
 
 use crate::widget_capnp::widget_market;
-
-// can we make this into a impl of some sort so others can use it?
-#[derive(Debug)]
-pub struct MarketSnapshot {
-    pub account: HashMap<String, i32>,
-    pub market: HashMap<String, i32>,
-}
 
 pub struct WidgetMarketClient {
     service: widget_market::Client,
@@ -36,12 +30,37 @@ impl WidgetMarketClient {
         tokio::task::spawn_local(Box::pin(rpc_system.map(|_| ())));
 
         // return the service
-        Ok(WidgetMarketClient {service})
+        Ok(WidgetMarketClient { service })
     }
 
     // joins the market and returns the id for the account
     pub async fn join(&self) -> String {
-        self.service.join_request().send().promise.await
+        self.service
+            .join_request()
+            .send()
+            .promise
+            .await
+            .unwrap()
+            .get()
+            .unwrap()
+            .get_id()
+            .unwrap()
+            .to_string()
+    }
+
+    // joins the market and returns the id for the account
+    pub async fn join_with_account(&self, account: HashMap<String, i32>) -> String {
+        let mut request = self.service.join_request();
+        let mut builder = request.get().init_account(account.len() as u32);
+        account.iter().enumerate().for_each(|(i, (w, c))| {
+            builder.reborrow().get(i as u32).set_widget(w);
+            builder.reborrow().get(i as u32).set_count(*c as i32);
+        });
+
+        request
+            .send()
+            .promise
+            .await
             .unwrap()
             .get()
             .unwrap()
@@ -51,47 +70,57 @@ impl WidgetMarketClient {
     }
 
     // checks the current status of the market from the account's perspective
-    pub async fn check(&self, id: &str) -> MarketSnapshot {
+    pub async fn check(&self, id: &str) -> (HashMap<String, i32>, HashMap<String, i32>) {
         let mut request = self.service.check_request();
         request.get().set_id(id);
 
         let result = request.send().promise.await.unwrap();
-        let market = result
-            .get()
-            .unwrap();
-        MarketSnapshot {
-            account: market.get_account()
+        let market = result.get().unwrap();
+        (
+            market
+                .get_account()
                 .unwrap()
                 .iter()
                 .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
                 .collect(),
-            market: market.get_market()
+            market
+                .get_market()
                 .unwrap()
                 .iter()
                 .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
-                .collect()
-        }
+                .collect(),
+        )
     }
 
     // request a trade be made
-    pub async fn trade(&self, id: &str, first: &str, second: &str) -> bool {
+    pub async fn trade(&self, id: &str, first: &str, second: &str) -> Result<(), String> {
         let mut request = self.service.trade_request();
         request.get().set_id(id);
         request.get().set_buy(first);
         request.get().set_sell(second);
 
-        if let Ok(_) = request.send().promise.await {true} else {false}
+        match request.send().promise.await {
+            Ok(_) => Ok(()),
+            // let's recapture the validation error perhaps?
+            Err(error) => Err(error.to_string().split("\"").skip(1).take(1).collect()),
+        }
     }
 
     // leaves the market and returns the number of points scored
-    pub async fn leave(&self, id: &str) -> i32 {
+    pub async fn leave(&self, id: &str) -> HashMap<String, i32> {
         let mut request = self.service.leave_request();
         request.get().set_id(id);
-
-        request.send().promise.await
+        request
+            .send()
+            .promise
+            .await
             .unwrap()
             .get()
             .unwrap()
-            .get_score()
+            .get_account()
+            .unwrap()
+            .iter()
+            .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
+            .collect()
     }
 }

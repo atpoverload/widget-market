@@ -6,10 +6,15 @@ interface WidgetMarket {
   #  know it and make trades. should there be another security layer?
   # TODO(timur): right now we can only create and destroy accounts; how do we
   #  let people jump between markets?
-  join @0 () -> (id :Text);
+  join @0 (account :List(WidgetCount)) -> (id :Text);
 
   # checks the current market from the account's perspective
   check @1 (id :Text) -> (account :List(WidgetCount), market :List(WidgetCount));
+
+  # struct WidgetCost {
+  #   widget @0 :Text;
+  #   cost @1 :Float32;
+  # }
 
   struct WidgetCount {
     widget @0 :Text;
@@ -22,5 +27,5 @@ interface WidgetMarket {
   trade @2 (id :Text, buy :Text, sell :Text);
 
   # TODO(timur): we can return some sort of bundle
-  leave @3 (id :Text) -> (score :Int32);
+  leave @3 (id :Text) -> (account :List(WidgetCount));
 }
