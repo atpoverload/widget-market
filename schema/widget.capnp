@@ -1,6 +1,6 @@
 @0xa289e6e439fadcd7;
 
-interface WidgetMarket {
+interface Market {
   # joins the market, getting an account id
   # TODO(timur): this is insecure because anyone can ping with an id if they
   #  know it and make trades. should there be another security layer?
@@ -10,11 +10,6 @@ interface WidgetMarket {
 
   # checks the current market from the account's perspective
   check @1 (id :Text) -> (account :List(WidgetCount), market :List(WidgetCount));
-
-  # struct WidgetCost {
-  #   widget @0 :Text;
-  #   cost @1 :Float32;
-  # }
 
   struct WidgetCount {
     widget @0 :Text;

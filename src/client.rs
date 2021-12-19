@@ -5,10 +5,10 @@ use futures::FutureExt;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use crate::widget_capnp::widget_market;
+use crate::widget_capnp::market;
 
 pub struct WidgetMarketClient {
-    service: widget_market::Client,
+    service: market::Client,
 }
 
 impl WidgetMarketClient {
@@ -24,7 +24,7 @@ impl WidgetMarketClient {
             Default::default(),
         ));
         let mut rpc_system = RpcSystem::new(rpc_network, None);
-        let service: widget_market::Client = rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
+        let service: market::Client = rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
 
         // pin the rpc system to a task
         tokio::task::spawn_local(Box::pin(rpc_system.map(|_| ())));

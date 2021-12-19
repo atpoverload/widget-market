@@ -17,15 +17,12 @@ use std::collections::HashMap;
 use std::fs::read_to_string;
 
 use clap::{App, Arg};
-use capnp_rpc::pry;
-use capnp::capability::Promise;
-use log::{debug, error, info};
+use log::{debug, info};
 use rand::{distributions::Alphanumeric, Rng};
 use serde_json;
 
 use widget_market::market::{Market, ValidationError};
-use widget_market::server;
-use widget_market::widget_capnp;
+use widget_market::single_market;
 
 fn new_id(size: usize) -> String {
     rand::thread_rng()
@@ -151,121 +148,6 @@ impl Market for FooMarket {
     }
 }
 
-impl widget_capnp::widget_market::Server for FooMarket {
-    fn join(&mut self, params: widget_capnp::widget_market::JoinParams, mut results: widget_capnp::widget_market::JoinResults) -> Promise<(), capnp::Error> {
-        info!("join requested");
-
-        let request = pry!(params.get());
-        if request.has_account() {
-            let account: HashMap<String, i32> = request
-                .get_account()
-                .unwrap()
-                .iter()
-                .map(|c| (c.get_widget().unwrap().to_string(), c.get_count()))
-                .collect();
-            match self.add_account(account) {
-                Ok(id) => {
-                    info!("added account {}", id);
-                    results.get().set_id(&id);
-                    Promise::ok(())
-                }
-                Err(error) => {
-                    error!("unable to add account");
-                    error!("{:?}", error);
-                    Promise::err(capnp::Error::failed(format!("{:?}", error)))
-                }
-            }
-        } else {
-            match self.create_account() {
-                Ok(id) => {
-                    info!("created account {}", id);
-                    results.get().set_id(&id);
-                    Promise::ok(())
-                }
-                Err(error) => {
-                    error!("unable to create account");
-                    error!("{:?}", error);
-                    Promise::err(capnp::Error::failed(format!("{:?}", error)))
-                }
-            }
-        }
-    }
-
-    fn check(&mut self, params: widget_capnp::widget_market::CheckParams, mut results: widget_capnp::widget_market::CheckResults) -> Promise<(), capnp::Error> {
-        let id = pry!(params.get()).get_id().unwrap();
-        info!("check requested by account {}", id);
-
-        match self.get_market() {
-            Ok(market) => match self.get_account(id) {
-                Ok(account) => {
-                    let mut results = results.get();
-                    let mut builder = results.reborrow().init_market(market.len() as u32);
-                    market.iter().enumerate().for_each(|(i, (w, c))| {
-                        builder.reborrow().get(i as u32).set_widget(w);
-                        builder.reborrow().get(i as u32).set_count(*c as i32);
-                    });
-
-                    let mut builder = results.reborrow().init_account(market.len() as u32);
-                    account.iter().enumerate().for_each(|(i, (w, c))| {
-                        builder.reborrow().get(i as u32).set_widget(w);
-                        builder.reborrow().get(i as u32).set_count(*c as i32);
-                    });
-                    Promise::ok(())
-                }
-                Err(error) => {
-                    error!("unable to get account {}", id);
-                    error!("{:?}", error);
-                    Promise::err(capnp::Error::failed(format!("{:?}", error)))
-                }
-            },
-            Err(error) => {
-                error!("unable to get market");
-                error!("{:?}", error);
-                Promise::err(capnp::Error::failed(format!("{:?}", error)))
-            }
-        }
-    }
-
-    fn trade(&mut self, params: widget_capnp::widget_market::TradeParams, _: widget_capnp::widget_market::TradeResults) -> Promise<(), capnp::Error> {
-        // grab the params
-        let params = pry!(params.get());
-        let id = params.get_id().unwrap();
-        let buy = params.get_buy().unwrap();
-        let sell = params.get_sell().unwrap();
-        info!("trade of {} -> {} requested by account {}", buy, sell, id);
-
-        match self.submit_trade(id, buy, sell) {
-            Ok(()) => Promise::ok(()),
-            Err(error) => {
-                error!("unable to make trade");
-                error!("{:?}", error);
-                Promise::err(capnp::Error::failed(format!("{:?}", error)))
-            }
-        }
-    }
-
-    fn leave(&mut self, params: widget_capnp::widget_market::LeaveParams, mut results: widget_capnp::widget_market::LeaveResults) -> Promise<(), capnp::Error> {
-        let id = pry!(params.get()).get_id().unwrap();
-        info!("leave requested by account {}", id);
-        match self.remove_account(id) {
-            Ok(account) => {
-                let mut results = results.get();
-                let mut builder = results.reborrow().init_account(account.len() as u32);
-                account.iter().enumerate().for_each(|(i, (w, c))| {
-                    builder.reborrow().get(i as u32).set_widget(w);
-                    builder.reborrow().get(i as u32).set_count(*c as i32);
-                });
-                Promise::ok(())
-            }
-            Err(error) => {
-                error!("unable to get remove account {}", id);
-                error!("{:?}", error);
-                Promise::err(capnp::Error::failed(format!("{:?}", error)))
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,94 +220,6 @@ mod tests {
         let id = market.add_account(new_account_2()).unwrap();
         assert_eq!(market.get_account(&id).unwrap(), &new_account_2());
     }
-
-    fn get_account(id: &str, client: &widget_capnp::widget_market::Client) -> HashMap<String, i32>{
-        let mut request = client.check_request();
-        request.get().set_id(id);
-        futures::executor::block_on(request.send().promise)
-                .unwrap()
-                .get()
-                .unwrap()
-                .get_account()
-                .unwrap()
-                .iter()
-                .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
-                .collect()
-    }
-
-    // TODO: fix this test; it does essentially the same thing as the above test
-    #[test]
-    fn test_server_impl() {
-        let client = capnp_rpc::new_client::<widget_capnp::widget_market::Client, FooMarket>(FooMarket::from_map(new_market()));
-
-        // join the market
-        let id = futures::executor::block_on(client.join_request().send().promise)
-            .unwrap()
-            .get()
-            .unwrap()
-            .get_id()
-            .unwrap()
-            .to_string();
-
-        // check the market
-        // TODO: figure out why the compiler is upset
-        let mut request = client.check_request();
-        request.get().set_id(&id);
-        assert_eq!(futures::executor::block_on(request.send().promise)
-                .unwrap()
-                .get()
-                .unwrap()
-                .get_market()
-                .unwrap()
-                .iter()
-                .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
-                .collect::<HashMap<String, i32>>(),
-            new_market());
-
-        assert_eq!(get_account(&id, &client), new_account());
-
-        // make a trade
-        let mut request = client.trade_request();
-        request.get().set_id(&id);
-        request.get().set_buy("foo");
-        request.get().set_sell("bar");
-        futures::executor::block_on(request.send().promise)
-            .unwrap()
-            .get()
-            .expect("the trade should have been submitted successfully");
-
-        assert_eq!(get_account(&id, &client), used_account());
-
-        // leave the market
-        let mut request = client.leave_request();
-        request.get().set_id(&id);
-        let account: HashMap<String, i32> = futures::executor::block_on(request.send().promise)
-                .unwrap()
-                .get()
-                .unwrap()
-                .get_account()
-                .unwrap()
-                .iter()
-                .map(|w| (w.get_widget().unwrap().to_string(), w.get_count()))
-                .collect();
-        assert_eq!(account, used_account());
-
-        // re-join the market
-        let mut join_request = client.join_request();
-        let mut builder = join_request.get().init_account(account.len() as u32);
-        account.iter().enumerate().for_each(|(i, (w, c))| {
-            builder.reborrow().get(i as u32).set_widget(w);
-            builder.reborrow().get(i as u32).set_count(*c as i32);
-        });
-        let id = futures::executor::block_on(join_request.send().promise)
-            .unwrap()
-            .get()
-            .unwrap()
-            .get_id()
-            .unwrap()
-            .to_string();
-        assert_eq!(get_account(&id, &client), used_account());
-    }
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -465,5 +259,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("starting foo market server at {} with contents:", addr);
     market.get_market().unwrap().iter().for_each(|(k, v)| {info!(" - {}: {}", k, v);});
 
-    server::single_market(addr, market).await
+    single_market::run(addr, market).await
 }
